@@ -1,0 +1,94 @@
+{
+  "p01_warmup_not.mc": {
+    "expected": "safe",
+    "block": "base"
+  },
+  "p02_warmup_xor.mc": {
+    "expected": "fail",
+    "block": "base"
+  },
+  "p03_add_overflow.mc": {
+    "expected": "safe",
+    "block": "base"
+  },
+  "p04_abs.mc": {
+    "expected": "fail",
+    "block": "if"
+  },
+  "p05_clamp.mc": {
+    "expected": "safe",
+    "block": "if"
+  },
+  "p06_grade.mc": {
+    "expected": "fail",
+    "block": "if"
+  },
+  "p07_warmup_double.mc": {
+    "expected": "fail",
+    "block": "ops"
+  },
+  "p08_eq_avg.mc": {
+    "expected": "safe",
+    "block": "ops"
+  },
+  "p09_div_identity.mc": {
+    "expected": "fail",
+    "block": "ops"
+  },
+  "p10_div_rem.mc": {
+    "expected": "safe",
+    "block": "ops"
+  },
+  "p11_minmax.mc": {
+    "expected": "safe",
+    "block": "call"
+  },
+  "p12_sat_add.mc": {
+    "expected": "fail",
+    "block": "call"
+  },
+  "p13_loop_count.mc": {
+    "expected": "safe",
+    "block": "loop"
+  },
+  "p14_lcg.mc": {
+    "expected": "fail",
+    "block": "loop"
+  },
+  "p15_loop_break.mc": {
+    "expected": "fail",
+    "block": "loop"
+  },
+  "p16_atoi.mc": {
+    "expected": "fail",
+    "block": "carr"
+  },
+  "p17_sort_bubble.mc": {
+    "expected": "safe",
+    "block": "carr"
+  },
+  "p18_array_hash.mc": {
+    "expected": "safe",
+    "block": "carr"
+  },
+  "p19_lookup.mc": {
+    "expected": "safe",
+    "block": "sarr"
+  },
+  "p20_write_read.mc": {
+    "expected": "fail",
+    "block": "sarr"
+  },
+  "p21_login.mc": {
+    "expected": "safe",
+    "block": "merge"
+  },
+  "p22_sort_selection.mc": {
+    "expected": "safe",
+    "block": "merge"
+  },
+  "p23_login_bug.mc": {
+    "expected": "fail",
+    "block": "merge"
+  }
+}

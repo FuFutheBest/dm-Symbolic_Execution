@@ -1,0 +1,61 @@
+{
+  "full_score": 100,
+  "blocks": [
+    {
+      "id": "base",
+      "name": "基础",
+      "points": 40,
+      "requires": null,
+      "functions": "feasible, check"
+    },
+    {
+      "id": "if",
+      "name": "分支",
+      "points": 20,
+      "requires": "base",
+      "functions": "exec_if"
+    },
+    {
+      "id": "ops",
+      "name": "复杂运算",
+      "points": 20,
+      "requires": "base",
+      "functions": "binary (/ % << >>), div_failure, shift_failure"
+    },
+    {
+      "id": "call",
+      "name": "函数调用",
+      "points": 20,
+      "requires": "if",
+      "functions": "call"
+    },
+    {
+      "id": "loop",
+      "name": "循环",
+      "points": 20,
+      "requires": "if",
+      "functions": "exec_for"
+    },
+    {
+      "id": "carr",
+      "name": "常量下标数组",
+      "points": 20,
+      "requires": "loop",
+      "functions": "index_failure, read, write (constant index)"
+    },
+    {
+      "id": "sarr",
+      "name": "符号下标数组",
+      "points": 20,
+      "requires": "carr",
+      "functions": "index_failure, read, write (symbolic index)"
+    },
+    {
+      "id": "merge",
+      "name": "状态合并",
+      "points": 20,
+      "requires": "sarr",
+      "functions": "merge"
+    }
+  ]
+}
