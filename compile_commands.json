@@ -1,0 +1,214 @@
+[
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "minic/checker.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/minic/checker.o",
+      "minic/checker.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "minic/inputs.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/minic/inputs.o",
+      "minic/inputs.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "minic/interp.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/minic/interp.o",
+      "minic/interp.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "minic/judge.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/minic/judge.o",
+      "minic/judge.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "minic/parser.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/minic/parser.o",
+      "minic/parser.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "see/core.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-I/home/fufu/Dev/dm/symbolic-execution/.venv/lib/python3.14/site-packages/z3/include",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/see/core.o",
+      "see/core.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "see/engine.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-I/home/fufu/Dev/dm/symbolic-execution/.venv/lib/python3.14/site-packages/z3/include",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/see/engine.o",
+      "see/engine.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "see/main.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-I/home/fufu/Dev/dm/symbolic-execution/.venv/lib/python3.14/site-packages/z3/include",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/see/main.o",
+      "see/main.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "tools/grade.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/tools/grade.o",
+      "tools/grade.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "tools/judge.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/tools/judge.o",
+      "tools/judge.cpp"
+    ]
+  },
+  {
+    "directory": "/home/fufu/Dev/dm/symbolic-execution",
+    "file": "tools/run.cpp",
+    "arguments": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Iminic",
+      "-MMD",
+      "-MP",
+      "-c",
+      "-o",
+      "build/obj/tools/run.o",
+      "tools/run.cpp"
+    ]
+  }
+]
