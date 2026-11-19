@@ -14,6 +14,8 @@
 //   model when a failure is found incomplete_      set it when z3 cannot
 //   decide a query
 #include "engine.h"
+#include <cstddef>
+#include <optional>
 
 using minic::Stmt;
 
@@ -65,9 +67,30 @@ void Engine::check(const State &st, const z3::expr &fail) {
 // run the branches with exec(). s.else_block is null when there is no else.
 // Return all states that come out, through merge().
 std::vector<State> Engine::exec_if(const Stmt &s, State st) {
-  (void)s;
-  (void)st;
-  throw Unsupported("TODO: exec_if");
+  auto c = eval(*s.cond, st);
+  bool no_else = (s.else_block == nullptr);
+  std::vector<State> res;
+
+  for (const auto &r : c) {
+    auto true_cond = r.state;
+    true_cond.pc = true_cond.pc & r.value;
+    if (feasible(true_cond)) {
+      auto after = exec(*s.then_block, true_cond);
+      res.reserve(res.size() + after.size());
+      res.insert(res.end(), after.begin(), after.end());
+    }
+
+    auto false_cond = r.state;
+    false_cond.pc = false_cond.pc & !r.value;
+    if (feasible(false_cond)) {
+      auto after = no_else ? std::vector<State>{false_cond}
+                           : exec(*s.else_block, false_cond);
+      res.reserve(res.size() + after.size());
+      res.insert(res.end(), after.begin(), after.end());
+    }
+  }
+
+  return merge(res);
 }
 
 // =====================================================================
