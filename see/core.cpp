@@ -36,9 +36,18 @@ bool Engine::feasible(const State &st) {
 //   unknown -> undecided: set incomplete_ = true, so the answer cannot be
 //   "safe"
 void Engine::check(const State &st, const z3::expr &fail) {
-  (void)st;
-  (void)fail;
-  throw Unsupported("TODO: check");
+  z3::solver solver(ctx_);
+
+  solver.add(st.pc);
+  solver.add(fail);
+
+  auto result = solver.check();
+
+  if (result == z3::sat) {
+    model_ = solver.get_model();
+  } else if (result == z3::unknown) {
+    incomplete_ = true;
+  }
 }
 
 // =======================================================================
