@@ -25,8 +25,13 @@ using minic::Stmt;
 // Return false only when z3 answers unsat. When z3 answers unknown (for
 // instance after a timeout) the path may be real: keep it, return true.
 bool Engine::feasible(const State &st) {
-  (void)st;
-  throw Unsupported("TODO: feasible");
+  z3::solver solver(ctx_);
+  solver.add(st.pc);
+  auto result = solver.check();
+  if (result == z3::unsat) {
+    return false;
+  }
+  return true;
 }
 
 // Can the program fail at this point? `fail` is the failure condition here
