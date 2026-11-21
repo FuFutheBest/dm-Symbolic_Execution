@@ -23,17 +23,16 @@ using minic::Stmt;
 // base Handbook 3.2. The two z3 queries; with them the tool handles
 // straight-line programs.
 
-// Can some input reach state `st`, i.e. is st.pc satisfiable?
-// Return false only when z3 answers unsat. When z3 answers unknown (for
-// instance after a timeout) the path may be real: keep it, return true.
+// Can some input reach state `st`? With state merging, SMT pruning is
+// optional: keeping an infeasible path does not create real failures.
+// If a solver is used, only unsat discards the path; unknown retains it.
 bool Engine::feasible(const State &st) {
-  z3::solver solver(ctx_);
-  solver.add(st.pc);
-  auto result = solver.check();
-  if (result == z3::unsat) {
+  z3::expr pc = simplified(st.pc);
+  if (pc.is_false())
     return false;
-  }
-  return true;
+  if (pc.is_true() || !options_.prune_branches)
+    return true;
+  return query(pc, ctx_.bool_val(true), false) != z3::unsat;
 }
 
 // Can the program fail at this point? `fail` is the failure condition here
@@ -42,17 +41,19 @@ bool Engine::feasible(const State &st) {
 //   unsat   -> no input fails here
 //   unknown -> undecided: set incomplete_ = true, so the answer cannot be
 //   "safe"
+// Optional batching stores the formula at this exact program point; run()
+// flushes pending checks before deciding the final verdict.
 void Engine::check(const State &st, const z3::expr &fail) {
-  z3::solver solver(ctx_);
-
-  solver.add(st.pc);
-  solver.add(fail);
-
-  auto result = solver.check();
-
-  if (result == z3::sat) {
-    model_ = solver.get_model();
-  } else if (result == z3::unknown) {
+  if (model_)
+    return;
+  z3::expr failure = simplified(st.pc && fail);
+  if (failure.is_false())
+    return;
+  if (options_.batch_failures) {
+    pending_failures_.push_back(failure);
+    if (pending_failures_.size() >= options_.failure_batch_size)
+      flush_failures();
+  } else if (query(st.pc, fail, true) == z3::unknown) {
     incomplete_ = true;
   }
 }
@@ -73,7 +74,7 @@ std::vector<State> Engine::exec_if(const Stmt &s, State st) {
 
   for (const auto &r : c) {
     auto true_cond = r.state;
-    true_cond.pc = true_cond.pc & r.value;
+    true_cond.pc = simplified(true_cond.pc && r.value);
     if (feasible(true_cond)) {
       auto after = exec(*s.then_block, true_cond);
       res.reserve(res.size() + after.size());
@@ -81,7 +82,7 @@ std::vector<State> Engine::exec_if(const Stmt &s, State st) {
     }
 
     auto false_cond = r.state;
-    false_cond.pc = false_cond.pc & !r.value;
+    false_cond.pc = simplified(false_cond.pc && !r.value);
     if (feasible(false_cond)) {
       auto after = no_else ? std::vector<State>{false_cond}
                            : exec(*s.else_block, false_cond);
@@ -180,6 +181,8 @@ Results Engine::call(const minic::Func &f, const std::vector<Value> &args,
 // handles. Operands are int (32-bit bit-vectors), or bool for == and !=.
 z3::expr Engine::binary(const std::string &op, const z3::expr &a,
                         const z3::expr &b) {
+  if (auto folded = fold_binary(op, a, b))
+    return *folded;
   if (op == "+")
     return a + b;
   if (op == "-")
@@ -247,32 +250,47 @@ z3::expr Engine::index_failure(const z3::expr &i, int64_t n) {
 
 // The element arr[i].
 z3::expr Engine::read(const Value &arr, const z3::expr &i) {
-  z3::expr index = i.simplify();
+  z3::expr index = simplified(i);
   if (index.is_numeral()) {
     uint64_t k = index.get_numeral_uint64();
+    if (k >= arr.size())
+      throw Unsupported("out-of-range array read");
     return arr[static_cast<size_t>(k)];
   }
+  if (arr.empty())
+    throw Unsupported("empty array read");
+  if (options_.array_theory)
+    return simplified(z3::select(as_array(arr), index));
 
   z3::expr value = arr.back();
   for (size_t k = arr.size() - 1; k > 0; --k) {
     z3::expr at = ctx_.bv_val(static_cast<uint64_t>(k - 1), 32);
-    value = z3::ite(index == at, arr[k - 1], value);
+    value = choose(index == at, arr[k - 1], value);
   }
   return value;
 }
 
 // arr[i] = v.
 void Engine::write(Value &arr, const z3::expr &i, const z3::expr &v) {
-  z3::expr index = i.simplify();
+  z3::expr index = simplified(i);
   if (index.is_numeral()) {
     uint64_t k = index.get_numeral_uint64();
+    if (k >= arr.size())
+      throw Unsupported("out-of-range array write");
     arr[static_cast<size_t>(k)] = v;
+    return;
+  }
+  if (options_.array_theory) {
+    z3::expr updated = z3::store(as_array(arr), index, v);
+    for (size_t k = 0; k < arr.size(); ++k)
+      arr[k] = simplified(
+          z3::select(updated, ctx_.bv_val(static_cast<uint64_t>(k), 32)));
     return;
   }
 
   for (size_t k = 0; k < arr.size(); ++k) {
     z3::expr at = ctx_.bv_val(static_cast<uint64_t>(k), 32);
-    arr[k] = z3::ite(index == at, v, arr[k]);
+    arr[k] = choose(index == at, v, arr[k]);
   }
 }
 
@@ -284,8 +302,8 @@ void Engine::write(Value &arr, const z3::expr &i, const z3::expr &v) {
 // Array elements and return values are merged just like scalar variables.
 std::vector<State> Engine::merge(std::vector<State> states) {
   std::vector<State> out;
-  for (State::Flow flow : {State::Normal, State::Break, State::Continue,
-                           State::Return}) {
+  for (State::Flow flow :
+       {State::Normal, State::Break, State::Continue, State::Return}) {
     std::optional<State> merged;
     for (const State &state : states) {
       if (state.flow != flow)
@@ -298,14 +316,13 @@ std::vector<State> Engine::merge(std::vector<State> states) {
       for (auto &[name, values] : merged->store) {
         const Value &incoming = state.store.at(name);
         for (size_t k = 0; k < values.size(); ++k) {
-          values[k] = z3::ite(state.pc, incoming[k], values[k]).simplify();
+          values[k] = choose(state.pc, incoming[k], values[k]);
         }
       }
       if (flow == State::Return && merged->ret && state.ret) {
-        merged->ret =
-            z3::ite(state.pc, *state.ret, *merged->ret).simplify();
+        merged->ret = choose(state.pc, *state.ret, *merged->ret);
       }
-      merged->pc = (merged->pc || state.pc).simplify();
+      merged->pc = simplified(merged->pc || state.pc);
     }
     if (merged)
       out.push_back(*merged);

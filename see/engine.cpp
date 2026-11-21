@@ -6,7 +6,8 @@ using minic::Expr;
 using minic::Stmt;
 using minic::Type;
 
-Engine::Engine(const minic::Program &prog) : prog_(prog) {}
+Engine::Engine(const minic::Program &prog, EngineOptions options)
+    : prog_(prog), options_(options), solver_(ctx_) {}
 
 // ----------------------------------------------------------------------
 // API
@@ -28,6 +29,7 @@ std::string Engine::run() {
     init.store.insert_or_assign(p.name, v);
   }
   exec(*prog_.entry->body, init);
+  flush_failures();
   if (model_)
     return "fail";
   return incomplete_ ? "unknown" : "safe";
@@ -57,15 +59,15 @@ minic::Inputs Engine::counterexample() const {
 // helpers
 
 bool Engine::guard(State &st, const z3::expr &fail) {
-  z3::expr f = fail.simplify();
+  // Mandatory trap simplification also protects concrete array accesses.
+  z3::expr f = options_.simplification ? simplified(fail) : fail.simplify();
   if (f.is_false())
     return true; // cannot fail here: nothing to ask
   check(st, f);
   if (f.is_true())
-    return false; // fails on every input that gets here
-  st.pc =
-      st.pc && !f; // inputs that failed here are done; go on with the others
-  return true;
+    return false;                  // fails on every input that gets here
+  st.pc = simplified(st.pc && !f); // Continue only with non-failing inputs.
+  return !st.pc.is_false() && !model_;
 }
 
 z3::expr Engine::zero(Type ty) {
@@ -76,8 +78,8 @@ z3::expr Engine::zero(Type ty) {
 // statements
 
 std::vector<State> Engine::exec(const Stmt &s, State st) {
-  if (model_)
-    return {}; // a failure is found: stop everywhere
+  if (model_ || st.pc.is_false())
+    return {}; // A failure is found, or this path is blocked.
   if (st.flow != State::Normal)
     return {st}; // passed on until a loop or call handles it
 
@@ -94,6 +96,8 @@ std::vector<State> Engine::exec(const Stmt &s, State st) {
         for (State &z : exec(*x, y))
           next.push_back(z);
       states = next;
+      if (states.empty())
+        break;
     }
     // Variables declared in this block go out of scope.
     for (State &y : states)
@@ -151,8 +155,9 @@ std::vector<State> Engine::exec(const Stmt &s, State st) {
     return out;
   case Stmt::Assume:
     for (Result &r : eval(*s.cond, st)) {
-      r.state.pc = r.state.pc && r.value;
-      out.push_back(r.state);
+      r.state.pc = simplified(r.state.pc && r.value);
+      if (!r.state.pc.is_false())
+        out.push_back(r.state);
     }
     return out;
   case Stmt::ExprStmt:
@@ -168,6 +173,8 @@ std::vector<State> Engine::exec(const Stmt &s, State st) {
 
 Results Engine::eval(const Expr &e, State st) {
   Results out;
+  if (model_ || st.pc.is_false())
+    return out;
   switch (e.kind) {
   case Expr::IntLit:
     return {{st, ctx_.bv_val(e.value, 32)}};
@@ -188,7 +195,7 @@ Results Engine::eval(const Expr &e, State st) {
     return out;
   case Expr::Unary:
     for (Result &r : eval(*e.operand, st)) {
-      z3::expr v = e.op == "!" ? !r.value : e.op == "-" ? -r.value : ~r.value;
+      z3::expr v = unary(e.op, r.value);
       out.push_back({r.state, v});
     }
     return out;
@@ -198,10 +205,14 @@ Results Engine::eval(const Expr &e, State st) {
       // result. Failures and calls in it happen only under that condition.
       bool is_and = e.op == "&&";
       for (Result &ra : eval(*e.left, st)) {
-        z3::expr a = ra.value;
-        z3::expr enter = is_and ? a : !a;
+        z3::expr a = simplified(ra.value);
+        z3::expr enter = simplified(is_and ? a : !a);
+        if (enter.is_false()) {
+          out.push_back({ra.state, ctx_.bool_val(!is_and)});
+          continue;
+        }
         State inner = ra.state;
-        inner.pc = inner.pc && enter;
+        inner.pc = simplified(inner.pc && enter);
         Results rb = eval(*e.right, inner);
         if (rb.size() == 1) {
           // One state: keep it as one, valid whether or not the right side
@@ -209,7 +220,8 @@ Results Engine::eval(const Expr &e, State st) {
           State y = rb[0].state;
           y.pc = z3::eq(y.pc, inner.pc) ? ra.state.pc
                                         : (y.pc || (ra.state.pc && !enter));
-          out.push_back({y, is_and ? (a && rb[0].value) : (a || rb[0].value)});
+          out.push_back({y, simplified(is_and ? (a && rb[0].value)
+                                              : (a || rb[0].value))});
         } else {
           // The right side split (or always failed): the skipped case is a
           // state of its own.
@@ -233,7 +245,7 @@ Results Engine::eval(const Expr &e, State st) {
           if (!guard(y, shift_failure(rb.value)))
             continue;
         }
-        out.push_back({y, binary(e.op, ra.value, rb.value)});
+        out.push_back({y, simplified(binary(e.op, ra.value, rb.value))});
       }
     return out;
   case Expr::Call: {

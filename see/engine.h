@@ -1,24 +1,25 @@
 // A symbolic executor for MiniC, built on z3.
 //
-// The work is split in two files:
+// The work is split across:
 //   engine.cpp  the framework: walks the syntax tree, evaluates expressions
-//   in
+//               in
 //               the right order (including && and ||), passes
 //               break/continue/ return on to the enclosing loop or
-//               function, and cleans up variables that go out of scope. You
-//               do not need to change it.
-//   core.cpp    your part: the functions marked TODO, grouped in feature
-//               blocks. See the handbook, section "实验内容".
+//               function, and cleans up variables that go out of scope.
+//   core.cpp    language operations and state merging.
+//   optimizations.cpp  query policies, folding, simplification and encoding.
 //
 // A construct that is not handled yet throws Unsupported, and the answer
 // becomes "unknown". Keep it that way: never answer "safe" about code you
 // did not handle.
 #pragma once
 
+#include <chrono>
 #include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <z3++.h>
@@ -59,9 +60,27 @@ struct Result {
 };
 using Results = std::vector<Result>;
 
+// Switches for controlled, one-factor-at-a-time performance experiments.
+// The production executable uses these defaults; it reads no extra files.
+struct EngineOptions {
+  bool incremental = false;
+  bool constant_folding = true;
+  // Optional whole-expression simplification/cache. Trap conditions still
+  // receive mandatory local simplification when this is disabled.
+  bool simplification = false;
+  bool batch_failures = false;
+  bool prune_branches = false;
+  bool array_theory = false;
+  unsigned timeout_ms = 5000;
+  unsigned solver_budget_ms = 45000;
+  unsigned failure_batch_size = 64;
+  // Nonzero only in tests to force deterministic solver unknown results.
+  unsigned rlimit = 0;
+};
+
 class Engine {
 public:
-  explicit Engine(const minic::Program &prog);
+  explicit Engine(const minic::Program &prog, EngineOptions options = {});
 
   // Runs `check` symbolically. Returns "fail" if some input makes the
   // program fail, "safe" if none does, "unknown" if the engine could not
@@ -77,6 +96,25 @@ private:
   // (engine.cpp)
   const minic::Program &prog_;
   z3::context ctx_;
+  EngineOptions options_;
+  z3::solver solver_;
+  std::vector<z3::expr> solver_path_;
+  std::vector<z3::expr> pending_failures_;
+  std::unordered_map<unsigned, std::pair<z3::expr, z3::expr>> simplify_cache_;
+  std::chrono::steady_clock::duration solver_time_{};
+
+  z3::expr simplified(const z3::expr &e);
+  z3::expr choose(const z3::expr &cond, const z3::expr &yes,
+                  const z3::expr &no);
+  void prepare_path(const z3::expr &pc);
+  z3::check_result query(const z3::expr &pc, const z3::expr &condition,
+                         bool save_model);
+  void flush_failures();
+  std::optional<z3::expr> fold_binary(const std::string &op, const z3::expr &a,
+                                      const z3::expr &b);
+  z3::expr unary(const std::string &op, const z3::expr &a);
+  z3::expr as_array(const Value &arr);
+
   std::map<std::string, Value>
       inputs_;                     // parameter of check -> its z3 constants
   std::optional<z3::model> model_; // set by check() when a failure is found
