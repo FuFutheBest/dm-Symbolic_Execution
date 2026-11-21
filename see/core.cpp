@@ -237,8 +237,12 @@ z3::expr Engine::shift_failure(const z3::expr &amount) {
 
 // When does indexing an array of length n with i trap?
 z3::expr Engine::index_failure(const z3::expr &i, int64_t n) {
-  z3::expr index = z3::bv2int(i, true);
-  return (index < 0) || (index >= ctx_.int_val(n));
+  // Keep symbolic indices in bit-vector logic, especially after merging.
+  if (n <= 0)
+    return ctx_.bool_val(true);
+  if (n >= (int64_t(1) << 31))
+    return i < 0;
+  return (i < 0) || (i >= ctx_.bv_val(n, 32));
 }
 
 // The element arr[i].
@@ -275,15 +279,36 @@ void Engine::write(Value &arr, const z3::expr &i, const z3::expr &v) {
 // ====================================================================
 // merge Handbook 3.7.1.
 
-// exec_if, exec_for and call pass their resulting states through here.
-// Merging states that reached the same point into one keeps their number
-// from doubling at every branch. As given, it merges nothing, which is
-// correct but slow: the merge tasks time out without it.
-// TODO (merge): group the states by flow (Normal, Break, Continue, Return)
-// and merge each group into one state: pc is the disjunction of the pcs,
-// every variable becomes ite(pc_1, v_1, ite(pc_2, v_2, ...)), and so does
-// the returned value `ret` of Return states. States at the same point hold
-// the same variables. Note that after a merge a variable can hold an
-// ite(...) expression, so an array index that used to be a constant may
-// become symbolic: merging needs the sarr block.
-std::vector<State> Engine::merge(std::vector<State> states) { return states; }
+// Merge only states with the same control-flow outcome. Use each state's
+// final pc, including assumptions made inside the branch, as the selector.
+// Array elements and return values are merged just like scalar variables.
+std::vector<State> Engine::merge(std::vector<State> states) {
+  std::vector<State> out;
+  for (State::Flow flow : {State::Normal, State::Break, State::Continue,
+                           State::Return}) {
+    std::optional<State> merged;
+    for (const State &state : states) {
+      if (state.flow != flow)
+        continue;
+      if (!merged) {
+        merged = state;
+        continue;
+      }
+
+      for (auto &[name, values] : merged->store) {
+        const Value &incoming = state.store.at(name);
+        for (size_t k = 0; k < values.size(); ++k) {
+          values[k] = z3::ite(state.pc, incoming[k], values[k]).simplify();
+        }
+      }
+      if (flow == State::Return && merged->ret && state.ret) {
+        merged->ret =
+            z3::ite(state.pc, *state.ret, *merged->ret).simplify();
+      }
+      merged->pc = (merged->pc || state.pc).simplify();
+    }
+    if (merged)
+      out.push_back(*merged);
+  }
+  return out;
+}
