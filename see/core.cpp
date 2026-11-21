@@ -108,9 +108,37 @@ std::vector<State> Engine::exec_if(const Stmt &s, State st) {
 // loop variable from every state's store and return them all, through
 // merge().
 std::vector<State> Engine::exec_for(const Stmt &s, State st) {
-  (void)s;
-  (void)st;
-  throw Unsupported("TODO: exec_for");
+  std::vector<State> running = {st};
+  std::vector<State> finished;
+
+  for (int64_t i = s.lo; i < s.hi && !running.empty(); ++i) {
+    std::vector<State> next;
+    for (State &state : running) {
+      state.store.insert_or_assign(s.name, Value{ctx_.bv_val(i, 32)});
+      for (State result : exec(*s.body, state)) {
+        switch (result.flow) {
+        case State::Normal:
+        case State::Continue:
+          result.flow = State::Normal;
+          next.push_back(result);
+          break;
+        case State::Break:
+          result.flow = State::Normal;
+          finished.push_back(result);
+          break;
+        case State::Return:
+          finished.push_back(result);
+          break;
+        }
+      }
+    }
+    running = merge(next);
+  }
+
+  finished.insert(finished.end(), running.begin(), running.end());
+  for (State &state : finished)
+    state.store.erase(s.name);
+  return merge(finished);
 }
 
 // =====================================================================
