@@ -14,7 +14,7 @@
 //   model when a failure is found incomplete_      set it when z3 cannot
 //   decide a query
 #include "engine.h"
-#include <cstddef>
+#include "z3++.h"
 #include <optional>
 
 using minic::Stmt;
@@ -165,23 +165,26 @@ z3::expr Engine::binary(const std::string &op, const z3::expr &a,
     return a > b;
   if (op == ">=")
     return a >= b;
-  // TODO: / % << >>
-  // Careful: not every C++ operator on z3::expr means what MiniC means, and
-  // a << b on z3::expr even compiles but is NOT a shift. See section 3.3.
+  if (op == "<<")
+    return z3::shl(a, b);
+  if (op == ">>")
+    return z3::ashr(a, b);
+  if (op == "/")
+    return a / b;
+  if (op == "%")
+    return z3::srem(a, b);
   throw Unsupported("TODO: operator " + op);
 }
 
 // When does a / b (or a % b) trap? Return the condition as a z3 boolean.
 z3::expr Engine::div_failure(const z3::expr &a, const z3::expr &b) {
-  (void)a;
-  (void)b;
-  throw Unsupported("TODO: div_failure");
+  z3::expr min_int = ctx_.bv_val("-2147483648", 32);
+  return (b == 0) || (a == min_int && b == -1);
 }
 
 // When does a shift by `amount` trap?
 z3::expr Engine::shift_failure(const z3::expr &amount) {
-  (void)amount;
-  throw Unsupported("TODO: shift_failure");
+  return (amount < 0) || (amount >= 32);
 }
 
 // =============================================================== carr,
