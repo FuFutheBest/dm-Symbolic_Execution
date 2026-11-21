@@ -237,31 +237,39 @@ z3::expr Engine::shift_failure(const z3::expr &amount) {
 
 // When does indexing an array of length n with i trap?
 z3::expr Engine::index_failure(const z3::expr &i, int64_t n) {
-  (void)i;
-  (void)n;
-  // TODO (carr): a constant index -- the answer is ctx_.bool_val(true) or
-  // (false)
-  // TODO (sarr): an index that is not a constant
-  throw Unsupported("TODO: index_failure");
+  z3::expr index = z3::bv2int(i, true);
+  return (index < 0) || (index >= ctx_.int_val(n));
 }
 
 // The element arr[i].
 z3::expr Engine::read(const Value &arr, const z3::expr &i) {
-  (void)arr;
-  (void)i;
-  // TODO (carr): a constant index
-  // TODO (sarr): an index that is not a constant
-  throw Unsupported("TODO: read");
+  z3::expr index = i.simplify();
+  if (index.is_numeral()) {
+    uint64_t k = index.get_numeral_uint64();
+    return arr[static_cast<size_t>(k)];
+  }
+
+  z3::expr value = arr.back();
+  for (size_t k = arr.size() - 1; k > 0; --k) {
+    z3::expr at = ctx_.bv_val(static_cast<uint64_t>(k - 1), 32);
+    value = z3::ite(index == at, arr[k - 1], value);
+  }
+  return value;
 }
 
 // arr[i] = v.
 void Engine::write(Value &arr, const z3::expr &i, const z3::expr &v) {
-  (void)arr;
-  (void)i;
-  (void)v;
-  // TODO (carr): a constant index
-  // TODO (sarr): an index that is not a constant
-  throw Unsupported("TODO: write");
+  z3::expr index = i.simplify();
+  if (index.is_numeral()) {
+    uint64_t k = index.get_numeral_uint64();
+    arr[static_cast<size_t>(k)] = v;
+    return;
+  }
+
+  for (size_t k = 0; k < arr.size(); ++k) {
+    z3::expr at = ctx_.bv_val(static_cast<uint64_t>(k), 32);
+    arr[k] = z3::ite(index == at, v, arr[k]);
+  }
 }
 
 // ====================================================================
