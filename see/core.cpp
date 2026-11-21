@@ -128,10 +128,21 @@ std::vector<State> Engine::exec_for(const Stmt &s, State st) {
 // body through merge() before building the Results.
 Results Engine::call(const minic::Func &f, const std::vector<Value> &args,
                      const State &caller) {
-  (void)f;
-  (void)args;
-  (void)caller;
-  throw Unsupported("TODO: call");
+  State callee(ctx_);
+  callee.pc = caller.pc;
+  for (size_t k = 0; k < f.params.size(); ++k) {
+    callee.store.insert_or_assign(f.params[k].name, args[k]);
+  }
+  auto exec_res = exec(*f.body, callee);
+  auto return_res = merge(exec_res);
+  Results rt;
+  for (const auto &r : return_res) {
+    auto copy = caller;
+    copy.pc = r.pc;
+    rt.push_back(
+        {copy, r.ret.has_value() ? r.ret.value() : ctx_.bool_val(true)});
+  }
+  return rt;
 }
 
 // ======================================================================
